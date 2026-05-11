@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calculator</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .phone {
+      background: #1c1c1e;
+      border-radius: 44px;
+      padding: 2rem 1.25rem 1.5rem;
+      width: 320px;
+    }
+
+    .screen {
+      text-align: right;
+      padding: 0 0.5rem 0.75rem;
+      min-height: 110px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+
+    .expr-line {
+      font-size: 18px;
+      color: #636366;
+      min-height: 24px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      direction: rtl;
+    }
+
+    .main-num {
+      font-size: 68px;
+      font-weight: 300;
+      color: #f5f5f7;
+      line-height: 1.1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      direction: rtl;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 0.75rem;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 50%;
+      aspect-ratio: 1;
+      font-size: 22px;
+      font-weight: 400;
+      cursor: pointer;
+      transition: opacity 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .btn:active { opacity: 0.6; }
+
+    .btn.fn   { background: #a1a1a6; color: #1c1c1e; font-size: 20px; }
+    .btn.op   { background: #ff9f0a; color: #fff; font-size: 26px; }
+    .btn.op.active-op { background: #fff; color: #ff9f0a; }
+    .btn.num  { background: #333336; color: #f5f5f7; }
+
+    .btn.zero {
+      border-radius: 40px;
+      aspect-ratio: auto;
+      padding: 0 0 0 1.5rem;
+      justify-content: flex-start;
+      grid-column: span 2;
+      height: 72px;
+    }
+  </style>
+</head>
+<body>
+  <div class="phone">
+    <div class="screen">
+      <div class="expr-line" id="expr"></div>
+      <div class="main-num" id="num">0</div>
+    </div>
+    <div class="grid">
+      <button class="btn fn" data-a="clear">AC</button>
+      <button class="btn fn" data-a="sign">+/−</button>
+      <button class="btn fn" data-a="pct">%</button>
+      <button class="btn op" data-a="op" data-v="÷" id="op-div">÷</button>
+
+      <button class="btn num" data-a="d" data-v="7">7</button>
+      <button class="btn num" data-a="d" data-v="8">8</button>
+      <button class="btn num" data-a="d" data-v="9">9</button>
+      <button class="btn op" data-a="op" data-v="×" id="op-mul">×</button>
+
+      <button class="btn num" data-a="d" data-v="4">4</button>
+      <button class="btn num" data-a="d" data-v="5">5</button>
+      <button class="btn num" data-a="d" data-v="6">6</button>
+      <button class="btn op" data-a="op" data-v="−" id="op-sub">−</button>
+
+      <button class="btn num" data-a="d" data-v="1">1</button>
+      <button class="btn num" data-a="d" data-v="2">2</button>
+      <button class="btn num" data-a="d" data-v="3">3</button>
+      <button class="btn op" data-a="op" data-v="+" id="op-add">+</button>
+
+      <button class="btn num zero" data-a="d" data-v="0">0</button>
+      <button class="btn num" data-a="dot">.</button>
+      <button class="btn op" data-a="eq">=</button>
+    </div>
+  </div>
+
+  <script>
+    let cur = '0', prev = null, op = null, fresh = false, justEvaled = false;
+    const numEl = document.getElementById('num');
+    const exprEl = document.getElementById('expr');
+    const opIds = { '+': 'op-add', '−': 'op-sub', '×': 'op-mul', '÷': 'op-div' };
+
+    function fmt(v) {
+      let n = parseFloat(v);
+      if (isNaN(n)) return v;
+      let s = n.toPrecision(10).replace(/\.?0+$/, '');
+      if (s.length > 12) s = n.toExponential(4);
+      return s;
+    }
+
+    function setDisplay(v) { numEl.textContent = fmt(v); }
+
+    function clearOpHighlight() {
+      Object.values(opIds).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('active-op');
+      });
+    }
+
+    function highlightOp(o) {
+      clearOpHighlight();
+      const id = opIds[o];
+      if (id) document.getElementById(id).classList.add('active-op');
+    }
+
+    function compute(a, b, o) {
+      if (o === '+') return a + b;
+      if (o === '−') return a - b;
+      if (o === '×') return a * b;
+      if (o === '÷') return b === 0 ? 'Error' : a / b;
+      return b;
+    }
+
+    document.querySelectorAll('.btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const a = btn.dataset.a, v = btn.dataset.v;
+        const clearBtn = document.querySelector('[data-a="clear"]');
+
+        if (a === 'd') {
+          if (justEvaled) { cur = v; fresh = false; justEvaled = false; clearOpHighlight(); }
+          else if (cur === '0' || fresh) { cur = v; fresh = false; }
+          else if (cur.length < 12) cur += v;
+          setDisplay(cur);
+          clearBtn.textContent = 'C';
+
+        } else if (a === 'dot') {
+          if (fresh || justEvaled) { cur = '0.'; fresh = false; justEvaled = false; }
+          else if (!cur.includes('.')) cur += '.';
+          numEl.textContent = cur;
+          clearBtn.textContent = 'C';
+
+        } else if (a === 'op') {
+          clearOpHighlight();
+          if (op && !fresh && !justEvaled) {
+            const res = compute(parseFloat(prev), parseFloat(cur), op);
+            prev = String(res);
+            setDisplay(prev);
+            cur = prev;
+          } else {
+            prev = cur;
+          }
+          op = v; fresh = true; justEvaled = false;
+          exprEl.textContent = '';
+          highlightOp(op);
+
+        } else if (a === 'eq') {
+          if (op && prev !== null) {
+            exprEl.textContent = fmt(prev) + ' ' + op + ' ' + fmt(cur) + ' =';
+            const res = compute(parseFloat(prev), parseFloat(cur), op);
+            cur = String(res);
+            setDisplay(cur);
+            prev = null; op = null; fresh = true; justEvaled = true;
+            clearOpHighlight();
+          }
+
+        } else if (a === 'clear') {
+          if (btn.textContent === 'C' && cur !== '0') {
+            cur = '0'; setDisplay('0'); btn.textContent = 'C';
+          } else {
+            cur = '0'; prev = null; op = null; fresh = false; justEvaled = false;
+            setDisplay('0'); exprEl.textContent = ''; btn.textContent = 'AC';
+            clearOpHighlight();
+          }
+
+        } else if (a === 'sign') {
+          cur = String(-parseFloat(cur)); setDisplay(cur);
+
+        } else if (a === 'pct') {
+          cur = String(parseFloat(cur) / 100); setDisplay(cur);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
